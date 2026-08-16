@@ -1,7 +1,7 @@
 /**
  * Marvel Content — Client-Side Gemini AI Rewrite Module
  * Uses fine-tuned, specialized prompts for Cards, Social Posts, and Video Scripts.
- * Prevents conversational fluff, limits word counts, and optimizes for social retention.
+ * Appends 3-5 high-signal, niche-specific hashtags on social captions and video descriptions.
  */
 
 // Specialized Prompts by context
@@ -12,17 +12,17 @@ STRICT RULES:
 1. Maximum 20-35 words total.
 2. Must fit cleanly on a single visual slide without clutter.
 3. Wrap 1-2 core keywords in **bold** and wrap the single punchiest phrase in ++big++ (e.g. ++legal diligence++).
-4. No conversational preamble, no quotes, no hashtags, no filler. Return ONLY the exact card text.`,
+4. No conversational preamble, no quotes, no hashtags on the image card itself, no filler. Return ONLY the exact card text.`,
 
   post: `You are an elite LinkedIn & X (Twitter) ghostwriter for Marvellous Adepoju (Real Estate, Business Tech & PropTech).
 Goal: Rewrite the draft into a crisp, high-retention, non-bloated social post.
 STRICT RULES:
-1. Keep it punchy and concise (80-140 words max).
+1. Keep it punchy and concise (80-140 words).
 2. Structure:
    - Line 1: Strong 1-line hook that stops the scroll.
    - Middle: 2-3 short, scannable value takeaways with clean line breaks.
    - Ending: 1 brief question or call-to-action.
-   - 2-3 relevant hashtags (e.g. #RealEstate #PropTech #BusinessTech).
+   - Hashtags: ALWAYS append 3 to 5 clean, highly targeted niche hashtags at the very bottom (e.g. #RealEstate #PropTech #BusinessAutomation #TechFounders #NigeriaBusiness).
 3. No fluffy corporate buzzwords, no conversational filler ("Sure, here is..."). Return ONLY the post text.`,
 
   script: `You are a viral short-form video director (Reels, TikTok, Shorts) for Marvellous Adepoju.
@@ -37,10 +37,13 @@ BODY (3-35s):
 
 CALL TO ACTION (35-45s): [1 simple call to action: drop a comment or save this video]
 
+RECOMMENDED HASHTAGS:
+[Append 3 to 4 relevant tags for Reels/Shorts caption, e.g. #Shorts #PropTech #RealEstateInvesting #BusinessTech]
+
 STRICT RULES:
-1. Total script length: 70-110 words maximum (fast spoken pace).
+1. Total spoken body: 70-110 words maximum (fast spoken pace).
 2. Write for the ear: natural, punchy, direct. No academic waffle.
-3. Return ONLY the formatted script with HOOK, BODY, and CALL TO ACTION headers.`,
+3. Return ONLY the formatted script with HOOK, BODY, CALL TO ACTION, and RECOMMENDED HASHTAGS.`,
 
   idea: `You are a sharp content strategist. Turn this raw thought into a razor-sharp, punchy content angle or contrarian perspective (1-2 sentences maximum, under 30 words). Return ONLY the refined idea.`
 };
@@ -212,7 +215,6 @@ async function improveTextWithGemini(inputText, options = {}) {
       const candidate = data?.candidates?.[0];
       let textOutput = candidate?.content?.parts?.[0]?.text || '';
 
-      // Strip accidental markdown code blocks
       textOutput = textOutput.replace(/^```[a-z]*\n/i, '').replace(/\n```$/, '').trim();
 
       if (!textOutput) {
