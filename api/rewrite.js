@@ -1,19 +1,58 @@
 /**
  * Vercel Serverless Function: /api/rewrite
  * Securely proxies AI rewrite requests using GEMINI_API_KEY environment variable.
- * Includes smart model filtering (ignores TTS/audio/embeddings) and friendly error messages.
+ * Uses fine-tuned, specialized prompts for Cards, Social Posts, and Video Scripts.
  */
 
-const SYSTEM_INSTRUCTION = `You are a world-class social media copywriter and growth strategist for Marvellous Adepoju, specializing in Real Estate, Business Technology, and PropTech.
-Your goal: Rewrite the user's input text to be punchier, more engaging, high-retention, and optimized for social media platforms (LinkedIn, X, Instagram, Facebook).
-Rules:
-1. Preserve the core truth, factual claims, and exact message.
-2. Make hooks more captivating and eliminate fluff/waffle.
-3. For card text, support and utilize **bold** and ++big++ markup for emphasis where appropriate.
-4. Keep the tone authentic, sharp, authoritative, and accessible.
-5. Return ONLY the rewritten text without conversational preamble, quotes, or markdown code fences.`;
+// Specialized System Prompts tailored by content format
+const PROMPTS = {
+  card: `You are an elite visual graphic copywriter for Marvellous Adepoju (Real Estate & PropTech).
+Goal: Write an ultra-concise, high-impact hook or counter-intuitive truth for a single visual card graphic.
+STRICT RULES:
+1. Maximum 20-35 words total.
+2. Must fit cleanly on a single visual slide without clutter.
+3. Wrap 1-2 core keywords in **bold** and wrap the single punchiest phrase in ++big++ (e.g. ++legal diligence++).
+4. No conversational preamble, no quotes, no hashtags, no filler. Return ONLY the exact card text.`,
 
-// Filter only text-generating chat models (excludes TTS, audio, embeddings, imagen)
+  post: `You are an elite LinkedIn & X (Twitter) ghostwriter for Marvellous Adepoju (Real Estate, Business Tech & PropTech).
+Goal: Rewrite the draft into a crisp, high-retention, non-bloated social post.
+STRICT RULES:
+1. Keep it punchy and concise (80-140 words max).
+2. Structure:
+   - Line 1: Strong 1-line hook that stops the scroll.
+   - Middle: 2-3 short, scannable value takeaways with clean line breaks.
+   - Ending: 1 brief question or call-to-action.
+   - 2-3 relevant hashtags (e.g. #RealEstate #PropTech #BusinessTech).
+3. No fluffy corporate buzzwords, no conversational filler ("Sure, here is..."). Return ONLY the post text.`,
+
+  script: `You are a viral short-form video director (Reels, TikTok, Shorts) for Marvellous Adepoju.
+Goal: Turn the draft into a fast-paced, high-retention 30-45s spoken video script.
+STRICT FORMAT:
+HOOK (0-3s): [1 punchy pattern-interrupt sentence to grab attention immediately]
+
+BODY (3-35s):
+• [Point 1 - direct & spoken naturally]
+• [Point 2 - concrete insight or data]
+• [Point 3 - key takeaway]
+
+CALL TO ACTION (35-45s): [1 simple call to action: drop a comment or save this video]
+
+STRICT RULES:
+1. Total script length: 70-110 words maximum (fast spoken pace).
+2. Write for the ear: natural, punchy, direct. No academic waffle.
+3. Return ONLY the formatted script with HOOK, BODY, and CALL TO ACTION headers.`,
+
+  idea: `You are a sharp content strategist. Turn this raw thought into a razor-sharp, punchy content angle or contrarian perspective (1-2 sentences maximum, under 30 words). Return ONLY the refined idea.`
+};
+
+function getPromptForContext(contextType = '') {
+  const c = contextType.toLowerCase();
+  if (c.includes('card') || c.includes('graphic') || c.includes('hook')) return PROMPTS.card;
+  if (c.includes('script') || c.includes('video') || c.includes('reel')) return PROMPTS.script;
+  if (c.includes('idea') || c.includes('concept')) return PROMPTS.idea;
+  return PROMPTS.post;
+}
+
 function isValidTextModel(modelName) {
   const name = (modelName || '').toLowerCase();
   if (
@@ -21,7 +60,8 @@ function isValidTextModel(modelName) {
     name.includes('embedding') ||
     name.includes('imagen') ||
     name.includes('aqa') ||
-    name.includes('realtime')
+    name.includes('realtime') ||
+    name.includes('audio')
   ) {
     return false;
   }
@@ -29,7 +69,6 @@ function isValidTextModel(modelName) {
 }
 
 export default async function handler(req, res) {
-  // CORS & method check
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -41,7 +80,6 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: { message: 'Method Not Allowed' } });
   }
 
-  // Get API key from Vercel Environment Variable, or fallback to request header
   const apiKey = (process.env.GEMINI_API_KEY || req.headers['x-gemini-key'] || '').trim();
 
   if (!apiKey) {
@@ -53,13 +91,15 @@ export default async function handler(req, res) {
     });
   }
 
-  const { inputText, contextType = 'General Social Content', model = 'gemini-2.0-flash' } = req.body || {};
+  const { inputText, contextType = 'post', model = 'gemini-2.0-flash' } = req.body || {};
 
   if (!inputText || typeof inputText !== 'string') {
     return res.status(400).json({ error: { message: 'Missing or empty input text.' } });
   }
 
-  // 1. Dynamic Model Discovery: Query Google's ListModels endpoint
+  const systemPrompt = getPromptForContext(contextType);
+
+  // 1. Dynamic Model Discovery
   let discoveredTextModels = [];
   try {
     const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
@@ -76,7 +116,6 @@ export default async function handler(req, res) {
     console.warn('[Vercel Serverless] ListModels query skipped:', discoveryErr.message);
   }
 
-  // Prioritized fallback list of proven text generation models
   const standardTextModels = [
     model,
     'gemini-2.0-flash',
@@ -105,15 +144,15 @@ export default async function handler(req, res) {
               role: 'user',
               parts: [
                 {
-                  text: `${SYSTEM_INSTRUCTION}\n\nContext type: ${contextType}\n\nOriginal Text to improve:\n${inputText}`
+                  text: `${systemPrompt}\n\nDraft content to refine:\n${inputText}`
                 }
               ]
             }
           ],
           generationConfig: {
-            temperature: 0.7,
-            topP: 0.95,
-            maxOutputTokens: 1000
+            temperature: 0.6,
+            topP: 0.9,
+            maxOutputTokens: 600
           }
         })
       });
@@ -121,20 +160,15 @@ export default async function handler(req, res) {
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
         const rawMsg = errData?.error?.message || `HTTP ${response.status}`;
-        
-        // Categorize error
-        if (response.status === 429) {
-          throw new Error(`Rate limit exceeded on model ${cleanModel}. ${rawMsg}`);
-        } else if (response.status === 400 || response.status === 403) {
-          throw new Error(`Auth/Parameter error (${cleanModel}): ${rawMsg}`);
-        } else {
-          throw new Error(`Model ${cleanModel} error: ${rawMsg}`);
-        }
+        throw new Error(`${cleanModel}: ${rawMsg}`);
       }
 
       const data = await response.json();
       const candidate = data?.candidates?.[0];
-      const textOutput = candidate?.content?.parts?.[0]?.text;
+      let textOutput = candidate?.content?.parts?.[0]?.text || '';
+
+      // Strip any accidental wrapping markdown quotes or code blocks
+      textOutput = textOutput.replace(/^```[a-z]*\n/i, '').replace(/\n```$/, '').trim();
 
       if (!textOutput) {
         throw new Error(`No text returned by ${cleanModel}`);
@@ -144,11 +178,11 @@ export default async function handler(req, res) {
       return res.status(200).json({
         success: true,
         modelUsed: cleanModel,
-        rewrittenText: textOutput.trim()
+        rewrittenText: textOutput
       });
     } catch (err) {
       lastErrorDetail = err.message;
-      console.warn(`[Vercel Serverless] Model ${cleanModel} attempt failed, trying fallback:`, err.message);
+      console.warn(`[Vercel Serverless] Model ${cleanModel} failed, trying fallback:`, err.message);
     }
   }
 

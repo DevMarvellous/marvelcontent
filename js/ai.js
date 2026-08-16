@@ -1,19 +1,58 @@
 /**
  * Marvel Content — Client-Side Gemini AI Rewrite Module
- * Implements smart text-only model filtering (ignores TTS/audio/embeddings),
- * dynamic fallback, and friendly human-readable error messages.
+ * Uses fine-tuned, specialized prompts for Cards, Social Posts, and Video Scripts.
+ * Prevents conversational fluff, limits word counts, and optimizes for social retention.
  */
 
-const GEMINI_SYSTEM_INSTRUCTION = `You are a world-class social media copywriter and growth strategist for Marvellous Adepoju, specializing in Real Estate, Business Technology, and PropTech.
-Your goal: Rewrite the user's input text to be punchier, more engaging, high-retention, and optimized for social media platforms (LinkedIn, X, Instagram, Facebook).
-Rules:
-1. Preserve the core truth, factual claims, and exact message.
-2. Make hooks more captivating and eliminate fluff/waffle.
-3. For card text, support and utilize **bold** and ++big++ markup for emphasis where appropriate.
-4. Keep the tone authentic, sharp, authoritative, and accessible.
-5. Return ONLY the rewritten text without conversational preamble, quotes, or markdown code fences.`;
+// Specialized Prompts by context
+const PROMPTS = {
+  card: `You are an elite visual graphic copywriter for Marvellous Adepoju (Real Estate & PropTech).
+Goal: Write an ultra-concise, high-impact hook or counter-intuitive truth for a single visual card graphic.
+STRICT RULES:
+1. Maximum 20-35 words total.
+2. Must fit cleanly on a single visual slide without clutter.
+3. Wrap 1-2 core keywords in **bold** and wrap the single punchiest phrase in ++big++ (e.g. ++legal diligence++).
+4. No conversational preamble, no quotes, no hashtags, no filler. Return ONLY the exact card text.`,
 
-// Filter only text-generating chat models (excludes TTS, audio, embeddings, imagen)
+  post: `You are an elite LinkedIn & X (Twitter) ghostwriter for Marvellous Adepoju (Real Estate, Business Tech & PropTech).
+Goal: Rewrite the draft into a crisp, high-retention, non-bloated social post.
+STRICT RULES:
+1. Keep it punchy and concise (80-140 words max).
+2. Structure:
+   - Line 1: Strong 1-line hook that stops the scroll.
+   - Middle: 2-3 short, scannable value takeaways with clean line breaks.
+   - Ending: 1 brief question or call-to-action.
+   - 2-3 relevant hashtags (e.g. #RealEstate #PropTech #BusinessTech).
+3. No fluffy corporate buzzwords, no conversational filler ("Sure, here is..."). Return ONLY the post text.`,
+
+  script: `You are a viral short-form video director (Reels, TikTok, Shorts) for Marvellous Adepoju.
+Goal: Turn the draft into a fast-paced, high-retention 30-45s spoken video script.
+STRICT FORMAT:
+HOOK (0-3s): [1 punchy pattern-interrupt sentence to grab attention immediately]
+
+BODY (3-35s):
+• [Point 1 - direct & spoken naturally]
+• [Point 2 - concrete insight or data]
+• [Point 3 - key takeaway]
+
+CALL TO ACTION (35-45s): [1 simple call to action: drop a comment or save this video]
+
+STRICT RULES:
+1. Total script length: 70-110 words maximum (fast spoken pace).
+2. Write for the ear: natural, punchy, direct. No academic waffle.
+3. Return ONLY the formatted script with HOOK, BODY, and CALL TO ACTION headers.`,
+
+  idea: `You are a sharp content strategist. Turn this raw thought into a razor-sharp, punchy content angle or contrarian perspective (1-2 sentences maximum, under 30 words). Return ONLY the refined idea.`
+};
+
+function getPromptForContext(contextType = '') {
+  const c = contextType.toLowerCase();
+  if (c.includes('card') || c.includes('graphic') || c.includes('hook')) return PROMPTS.card;
+  if (c.includes('script') || c.includes('video') || c.includes('reel')) return PROMPTS.script;
+  if (c.includes('idea') || c.includes('concept')) return PROMPTS.idea;
+  return PROMPTS.post;
+}
+
 function isValidTextModel(modelName) {
   const name = (modelName || '').toLowerCase();
   if (
@@ -29,19 +68,12 @@ function isValidTextModel(modelName) {
   return name.includes('gemini') || name.includes('flash') || name.includes('pro');
 }
 
-// Cached list of discovered active text models
 let cachedActiveTextModels = null;
 
-/**
- * Check if the browser is online
- */
 function isOnline() {
   return typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
 }
 
-/**
- * Dynamically discover text models supported by the provided API key
- */
 async function discoverAvailableGeminiModels(apiKey) {
   if (cachedActiveTextModels && cachedActiveTextModels.length > 0) {
     return cachedActiveTextModels;
@@ -66,9 +98,6 @@ async function discoverAvailableGeminiModels(apiKey) {
   return [];
 }
 
-/**
- * Call AI Rewrite with dual-mode (Vercel Serverless API first, client-side fallback second)
- */
 async function improveTextWithGemini(inputText, options = {}) {
   if (!isOnline()) {
     throw new Error('OFFLINE: You are currently offline. Connect to the internet to run AI rewrite.');
@@ -76,7 +105,8 @@ async function improveTextWithGemini(inputText, options = {}) {
 
   const settings = await window.MarvelDB.getSetting('app_settings') || window.MarvelDB.DEFAULT_SETTINGS;
   const preferredModel = options.model || settings.geminiModel || 'gemini-2.0-flash';
-  const contextType = options.contextType || 'General Social Content';
+  const contextType = options.contextType || 'post';
+  const systemPrompt = getPromptForContext(contextType);
 
   // -------------------------------------------------------------
   // Mode 1: Attempt Vercel Serverless Endpoint (/api/rewrite)
@@ -113,7 +143,7 @@ async function improveTextWithGemini(inputText, options = {}) {
   }
 
   // -------------------------------------------------------------
-  // Mode 2: Client-side direct Google Gemini API call with dynamic discovery
+  // Mode 2: Client-side direct Google Gemini API call
   // -------------------------------------------------------------
   const clientKey = (settings.geminiApiKey || '').trim();
   if (!clientKey) {
@@ -122,7 +152,6 @@ async function improveTextWithGemini(inputText, options = {}) {
     throw error;
   }
 
-  // Discover actual supported text models from user's key
   const discoveredModels = await discoverAvailableGeminiModels(clientKey);
 
   const fallbackList = [
@@ -153,15 +182,15 @@ async function improveTextWithGemini(inputText, options = {}) {
               role: 'user',
               parts: [
                 {
-                  text: `${GEMINI_SYSTEM_INSTRUCTION}\n\nContext type: ${contextType}\n\nOriginal Text to improve:\n${inputText}`
+                  text: `${systemPrompt}\n\nDraft content to refine:\n${inputText}`
                 }
               ]
             }
           ],
           generationConfig: {
-            temperature: 0.7,
-            topP: 0.95,
-            maxOutputTokens: 1000
+            temperature: 0.6,
+            topP: 0.9,
+            maxOutputTokens: 600
           }
         })
       });
@@ -181,13 +210,16 @@ async function improveTextWithGemini(inputText, options = {}) {
 
       const data = await response.json();
       const candidate = data?.candidates?.[0];
-      const textOutput = candidate?.content?.parts?.[0]?.text;
+      let textOutput = candidate?.content?.parts?.[0]?.text || '';
+
+      // Strip accidental markdown code blocks
+      textOutput = textOutput.replace(/^```[a-z]*\n/i, '').replace(/\n```$/, '').trim();
 
       if (!textOutput) {
         throw new Error(`Empty response from ${currentModel}`);
       }
 
-      return textOutput.trim();
+      return textOutput;
     } catch (err) {
       lastClientError = err;
       console.warn(`[Client Direct] Model ${currentModel} skipped:`, err.message);
@@ -197,9 +229,6 @@ async function improveTextWithGemini(inputText, options = {}) {
   throw new Error(lastClientError ? lastClientError.message : 'All available Gemini model endpoints failed.');
 }
 
-/**
- * Open the AI Rewrite Dialog / Modal
- */
 let activeAIRewriteCallback = null;
 
 function openAIRewriteModal(currentText, contextType, onAcceptCallback) {
@@ -249,8 +278,7 @@ function openAIRewriteModal(currentText, contextType, onAcceptCallback) {
           if (keyInput) keyInput.focus();
         }
       } else {
-        // Detailed error diagnostic
-        resultBox.value = `❌ AI Rewrite Error\n\nReason: ${err.message}\n\n💡 Troubleshooting:\n• If you are seeing a quota error (429), Google free-tier rate limits may be temporarily reached.\n• Ensure your API key is active in Google AI Studio.\n• If deployed on Vercel, ensure GEMINI_API_KEY is saved in Vercel Environment Variables.`;
+        resultBox.value = `❌ AI Rewrite Error\n\nReason: ${err.message}\n\n💡 Troubleshooting:\n• If quota is exceeded (429), please wait a few seconds.\n• Check your key in Google AI Studio or Vercel Environment Variables.`;
         acceptBtn.disabled = true;
       }
     });
@@ -277,6 +305,7 @@ function closeAIRewriteModal() {
 
 window.MarvelAI = {
   isOnline,
+  PROMPTS,
   discoverAvailableGeminiModels,
   improveTextWithGemini,
   openAIRewriteModal,
