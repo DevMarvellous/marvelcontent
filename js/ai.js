@@ -1,6 +1,7 @@
 /**
  * Marvel Content — Client-Side Gemini AI Rewrite Module
- * Implements dynamic Google ModelService.ListModels discovery with automatic fallback.
+ * Implements smart text-only model filtering (ignores TTS/audio/embeddings),
+ * dynamic fallback, and friendly human-readable error messages.
  */
 
 const GEMINI_SYSTEM_INSTRUCTION = `You are a world-class social media copywriter and growth strategist for Marvellous Adepoju, specializing in Real Estate, Business Technology, and PropTech.
@@ -12,8 +13,24 @@ Rules:
 4. Keep the tone authentic, sharp, authoritative, and accessible.
 5. Return ONLY the rewritten text without conversational preamble, quotes, or markdown code fences.`;
 
-// Cached list of discovered active models for this session
-let cachedActiveModels = null;
+// Filter only text-generating chat models (excludes TTS, audio, embeddings, imagen)
+function isValidTextModel(modelName) {
+  const name = (modelName || '').toLowerCase();
+  if (
+    name.includes('tts') ||
+    name.includes('embedding') ||
+    name.includes('imagen') ||
+    name.includes('aqa') ||
+    name.includes('realtime') ||
+    name.includes('audio')
+  ) {
+    return false;
+  }
+  return name.includes('gemini') || name.includes('flash') || name.includes('pro');
+}
+
+// Cached list of discovered active text models
+let cachedActiveTextModels = null;
 
 /**
  * Check if the browser is online
@@ -23,11 +40,11 @@ function isOnline() {
 }
 
 /**
- * Dynamically discover models supported by the provided API key
+ * Dynamically discover text models supported by the provided API key
  */
 async function discoverAvailableGeminiModels(apiKey) {
-  if (cachedActiveModels && cachedActiveModels.length > 0) {
-    return cachedActiveModels;
+  if (cachedActiveTextModels && cachedActiveTextModels.length > 0) {
+    return cachedActiveTextModels;
   }
 
   try {
@@ -35,10 +52,11 @@ async function discoverAvailableGeminiModels(apiKey) {
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data.models)) {
-        cachedActiveModels = data.models
+        cachedActiveTextModels = data.models
           .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent'))
-          .map(m => m.name.replace(/^models\//, ''));
-        return cachedActiveModels;
+          .map(m => m.name.replace(/^models\//, ''))
+          .filter(isValidTextModel);
+        return cachedActiveTextModels;
       }
     }
   } catch (err) {
@@ -53,7 +71,7 @@ async function discoverAvailableGeminiModels(apiKey) {
  */
 async function improveTextWithGemini(inputText, options = {}) {
   if (!isOnline()) {
-    throw new Error('OFFLINE: AI rewrite requires an active internet connection.');
+    throw new Error('OFFLINE: You are currently offline. Connect to the internet to run AI rewrite.');
   }
 
   const settings = await window.MarvelDB.getSetting('app_settings') || window.MarvelDB.DEFAULT_SETTINGS;
@@ -91,7 +109,7 @@ async function improveTextWithGemini(inputText, options = {}) {
       }
     }
   } catch (apiErr) {
-    console.log('Serverless API unavailable/local file mode, using client fetch:', apiErr.message);
+    console.log('Serverless API unavailable (local mode), using client fetch:', apiErr.message);
   }
 
   // -------------------------------------------------------------
@@ -99,23 +117,24 @@ async function improveTextWithGemini(inputText, options = {}) {
   // -------------------------------------------------------------
   const clientKey = (settings.geminiApiKey || '').trim();
   if (!clientKey) {
-    const error = new Error('NO_API_KEY: Please set GEMINI_API_KEY in Vercel environment variables or enter your Gemini API key in Settings.');
+    const error = new Error('NO_API_KEY: No Gemini API Key found. Set GEMINI_API_KEY in Vercel environment variables or enter your API key in Settings.');
     error.code = 'NO_API_KEY';
     throw error;
   }
 
-  // Discover actual supported models from user's key
+  // Discover actual supported text models from user's key
   const discoveredModels = await discoverAvailableGeminiModels(clientKey);
 
   const fallbackList = [
     preferredModel,
     'gemini-2.0-flash',
+    'gemini-2.0-flash-lite-preview-02-05',
     'gemini-1.5-flash-latest',
     'gemini-1.5-flash',
     'gemini-2.0-flash-exp',
-    'gemini-1.5-flash-8b',
-    'gemini-1.0-pro'
-  ];
+    'gemini-1.5-pro-latest',
+    'gemini-1.5-pro'
+  ].filter(isValidTextModel);
 
   const modelsToTry = [...new Set([...discoveredModels, ...fallbackList].filter(Boolean))];
   let lastClientError = null;
@@ -149,8 +168,15 @@ async function improveTextWithGemini(inputText, options = {}) {
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
-        const msg = errData?.error?.message || `Status ${response.status}`;
-        throw new Error(`${currentModel}: ${msg}`);
+        const rawMsg = errData?.error?.message || `Status ${response.status}`;
+
+        if (response.status === 429) {
+          throw new Error(`Rate limit reached on ${currentModel}. Please wait a few seconds.`);
+        } else if (response.status === 400 || response.status === 403) {
+          throw new Error(`API key authorization issue with ${currentModel}: ${rawMsg}`);
+        } else {
+          throw new Error(`${currentModel}: ${rawMsg}`);
+        }
       }
 
       const data = await response.json();
@@ -164,7 +190,7 @@ async function improveTextWithGemini(inputText, options = {}) {
       return textOutput.trim();
     } catch (err) {
       lastClientError = err;
-      console.warn(`[Client Direct] Model ${currentModel} failed, trying next available:`, err.message);
+      console.warn(`[Client Direct] Model ${currentModel} skipped:`, err.message);
     }
   }
 
@@ -212,7 +238,7 @@ function openAIRewriteModal(currentText, contextType, onAcceptCallback) {
       resultBox.style.display = 'block';
 
       if (err.code === 'NO_API_KEY') {
-        resultBox.value = '⚠️ No API Key configured.\n\nPlease either:\n1. Set GEMINI_API_KEY in your Vercel Project Environment Variables, or\n2. Open Settings in this app and paste your Google Gemini API key.';
+        resultBox.value = '⚠️ No Gemini API Key Configured\n\nTo activate AI Rewrite, please either:\n1. Set GEMINI_API_KEY in your Vercel Project Environment Variables, or\n2. Open Settings in this app and paste your Google Gemini API key.';
         acceptBtn.disabled = true;
 
         const goToSettings = confirm('🔑 No Gemini API key detected.\n\nWould you like to open Settings now to enter your Google Gemini API key?');
@@ -223,7 +249,8 @@ function openAIRewriteModal(currentText, contextType, onAcceptCallback) {
           if (keyInput) keyInput.focus();
         }
       } else {
-        resultBox.value = `❌ Error: ${err.message}`;
+        // Detailed error diagnostic
+        resultBox.value = `❌ AI Rewrite Error\n\nReason: ${err.message}\n\n💡 Troubleshooting:\n• If you are seeing a quota error (429), Google free-tier rate limits may be temporarily reached.\n• Ensure your API key is active in Google AI Studio.\n• If deployed on Vercel, ensure GEMINI_API_KEY is saved in Vercel Environment Variables.`;
         acceptBtn.disabled = true;
       }
     });
@@ -234,7 +261,7 @@ function acceptAIRewrite() {
   const modal = document.getElementById('modal-ai-rewrite');
   if (resultBox && activeAIRewriteCallback) {
     const text = resultBox.value;
-    if (text && !text.startsWith('❌ Error:') && !text.startsWith('⚠️')) {
+    if (text && !text.startsWith('❌') && !text.startsWith('⚠️')) {
       activeAIRewriteCallback(text);
     }
   }

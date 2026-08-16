@@ -1,7 +1,7 @@
 /**
  * Vercel Serverless Function: /api/rewrite
  * Securely proxies AI rewrite requests using GEMINI_API_KEY environment variable.
- * Includes dynamic ModelService discovery & fallback.
+ * Includes smart model filtering (ignores TTS/audio/embeddings) and friendly error messages.
  */
 
 const SYSTEM_INSTRUCTION = `You are a world-class social media copywriter and growth strategist for Marvellous Adepoju, specializing in Real Estate, Business Technology, and PropTech.
@@ -12,6 +12,21 @@ Rules:
 3. For card text, support and utilize **bold** and ++big++ markup for emphasis where appropriate.
 4. Keep the tone authentic, sharp, authoritative, and accessible.
 5. Return ONLY the rewritten text without conversational preamble, quotes, or markdown code fences.`;
+
+// Filter only text-generating chat models (excludes TTS, audio, embeddings, imagen)
+function isValidTextModel(modelName) {
+  const name = (modelName || '').toLowerCase();
+  if (
+    name.includes('tts') ||
+    name.includes('embedding') ||
+    name.includes('imagen') ||
+    name.includes('aqa') ||
+    name.includes('realtime')
+  ) {
+    return false;
+  }
+  return name.includes('gemini') || name.includes('flash') || name.includes('pro');
+}
 
 export default async function handler(req, res) {
   // CORS & method check
@@ -26,14 +41,14 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: { message: 'Method Not Allowed' } });
   }
 
-  // Get API key from Vercel Environment Variable, or fallback to header
+  // Get API key from Vercel Environment Variable, or fallback to request header
   const apiKey = (process.env.GEMINI_API_KEY || req.headers['x-gemini-key'] || '').trim();
 
   if (!apiKey) {
     return res.status(400).json({
       error: {
         code: 'NO_API_KEY',
-        message: 'No GEMINI_API_KEY set in Vercel environment variables or provided in request.'
+        message: 'No GEMINI_API_KEY found in Vercel Environment Variables. Please add it in your Vercel Dashboard.'
       }
     });
   }
@@ -41,38 +56,40 @@ export default async function handler(req, res) {
   const { inputText, contextType = 'General Social Content', model = 'gemini-2.0-flash' } = req.body || {};
 
   if (!inputText || typeof inputText !== 'string') {
-    return res.status(400).json({ error: { message: 'Missing or invalid inputText parameter.' } });
+    return res.status(400).json({ error: { message: 'Missing or empty input text.' } });
   }
 
   // 1. Dynamic Model Discovery: Query Google's ListModels endpoint
-  let availableModels = [];
+  let discoveredTextModels = [];
   try {
     const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
     if (listRes.ok) {
       const listData = await listRes.json();
       if (Array.isArray(listData.models)) {
-        availableModels = listData.models
+        discoveredTextModels = listData.models
           .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent'))
-          .map(m => m.name.replace(/^models\//, ''));
+          .map(m => m.name.replace(/^models\//, ''))
+          .filter(isValidTextModel);
       }
     }
   } catch (discoveryErr) {
     console.warn('[Vercel Serverless] ListModels query skipped:', discoveryErr.message);
   }
 
-  // Build prioritized models list
-  const fallbackList = [
+  // Prioritized fallback list of proven text generation models
+  const standardTextModels = [
     model,
     'gemini-2.0-flash',
+    'gemini-2.0-flash-lite-preview-02-05',
     'gemini-1.5-flash-latest',
     'gemini-1.5-flash',
     'gemini-2.0-flash-exp',
-    'gemini-1.5-flash-8b',
-    'gemini-1.0-pro'
-  ];
+    'gemini-1.5-pro-latest',
+    'gemini-1.5-pro'
+  ].filter(isValidTextModel);
 
-  const modelsToTry = [...new Set([...availableModels, ...fallbackList].filter(Boolean))];
-  let lastError = null;
+  const modelsToTry = [...new Set([...discoveredTextModels, ...standardTextModels].filter(Boolean))];
+  let lastErrorDetail = null;
 
   for (const currentModel of modelsToTry) {
     const cleanModel = currentModel.replace(/^models\//, '');
@@ -81,9 +98,7 @@ export default async function handler(req, res) {
 
       const response = await fetch(endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [
             {
@@ -105,8 +120,16 @@ export default async function handler(req, res) {
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
-        const errMessage = errData?.error?.message || `Status ${response.status}`;
-        throw new Error(`${cleanModel}: ${errMessage}`);
+        const rawMsg = errData?.error?.message || `HTTP ${response.status}`;
+        
+        // Categorize error
+        if (response.status === 429) {
+          throw new Error(`Rate limit exceeded on model ${cleanModel}. ${rawMsg}`);
+        } else if (response.status === 400 || response.status === 403) {
+          throw new Error(`Auth/Parameter error (${cleanModel}): ${rawMsg}`);
+        } else {
+          throw new Error(`Model ${cleanModel} error: ${rawMsg}`);
+        }
       }
 
       const data = await response.json();
@@ -114,7 +137,7 @@ export default async function handler(req, res) {
       const textOutput = candidate?.content?.parts?.[0]?.text;
 
       if (!textOutput) {
-        throw new Error(`Empty response from ${cleanModel}`);
+        throw new Error(`No text returned by ${cleanModel}`);
       }
 
       res.setHeader('Access-Control-Allow-Origin', '*');
@@ -124,15 +147,15 @@ export default async function handler(req, res) {
         rewrittenText: textOutput.trim()
       });
     } catch (err) {
-      lastError = err;
-      console.warn(`[Vercel Serverless] Model ${cleanModel} failed, trying next available model:`, err.message);
+      lastErrorDetail = err.message;
+      console.warn(`[Vercel Serverless] Model ${cleanModel} attempt failed, trying fallback:`, err.message);
     }
   }
 
   res.setHeader('Access-Control-Allow-Origin', '*');
   return res.status(500).json({
     error: {
-      message: lastError ? lastError.message : 'All available Gemini model endpoints failed.'
+      message: `Gemini rewrite failed. Detail: ${lastErrorDetail || 'Unknown error'}`
     }
   });
 }
