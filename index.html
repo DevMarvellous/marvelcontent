@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Marvel Content — Creator Studio</title>
+  <meta name="description" content="Personal offline-first content-production tool for real estate and business technology creators." />
+
+  <!-- PWA & Favicon -->
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+  <link rel="apple-touch-icon" href="./favicon.svg" />
+  <link rel="manifest" href="./manifest.json" />
+  <meta name="theme-color" content="#080c14" />
+
+  <!-- Google Fonts: Inter & Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="./css/main.css" />
+  <link rel="stylesheet" href="./css/components.css" />
+</head>
+<body>
+
+  <!-- Top App Header -->
+  <header class="app-header">
+    <div class="container header-inner">
+      <div class="header-brand" onclick="switchView('view-today')">
+        <div class="brand-icon">⚡</div>
+        <div class="brand-info">
+          <h1>
+            <span>Marvel Content</span>
+            <span class="brand-tag">Studio</span>
+          </h1>
+          <span class="brand-sub">Marvellous Adepoju • PropTech & Business Tech</span>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button class="btn btn-secondary btn-sm" onclick="openBatchImportModal()">
+          📥 Import Batch
+        </button>
+        <button class="btn btn-primary btn-sm" onclick="openContentItemModal()">
+          ➕ New Item
+        </button>
+        <button id="btn-pwa-install-header" class="btn btn-accent btn-sm" style="display: none;" onclick="triggerPWAInstall()">
+          📱 Install App
+        </button>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabs-bar container">
+      <button class="nav-tab-btn active" data-view="view-today" onclick="switchView('view-today')">
+        <span>📅</span>
+        <span>Today</span>
+        <span class="nav-badge" id="badge-today-count">0</span>
+      </button>
+
+      <button class="nav-tab-btn" data-view="view-calendar" onclick="switchView('view-calendar')">
+        <span>🗓️</span>
+        <span>Calendar (Weekly)</span>
+        <span class="nav-badge" id="badge-calendar-count">0</span>
+      </button>
+
+      <button class="nav-tab-btn" data-view="view-ideas" onclick="switchView('view-ideas')">
+        <span>💡</span>
+        <span>Idea Bank</span>
+        <span class="nav-badge" id="badge-ideas-count">0</span>
+      </button>
+
+      <button class="nav-tab-btn" data-view="view-scripts" onclick="switchView('view-scripts')">
+        <span>🎬</span>
+        <span>Video Scripts</span>
+        <span class="nav-badge" id="badge-scripts-count">0</span>
+      </button>
+
+      <button class="nav-tab-btn" data-view="view-settings" onclick="switchView('view-settings')">
+        <span>⚙️</span>
+        <span>Settings</span>
+      </button>
+    </nav>
+  </header>
+
+  <!-- Main Workspace -->
+  <main class="app-main container">
+
+    <!-- PWA Install Banner -->
+    <div id="pwa-banner" class="pwa-install-banner">
+      <div>
+        <strong style="color: #ffffff; font-size: 0.95rem;">📱 Install Marvel Content App</strong>
+        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.2rem;">
+          Use offline anytime with full native performance and rapid home screen access.
+        </p>
+      </div>
+      <div style="display: flex; gap: 0.5rem;">
+        <button class="btn btn-accent btn-sm" onclick="triggerPWAInstall()">Install Now</button>
+        <button class="btn btn-secondary btn-sm" onclick="dismissPWABanner()">Dismiss</button>
+      </div>
+    </div>
+
+    <!-- --------------------------------------------------------
+     * VIEW 1: TODAY (DAILY POSTING DESK)
+     * -------------------------------------------------------- -->
+    <section id="view-today" class="view-section active">
+      <div class="panel-card">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">
+              <span>📅</span>
+              <span id="today-day-heading">Today's Content Plan</span>
+            </h2>
+            <p class="panel-subtitle" id="today-date-subtitle">Focus view: Post scheduled items for today directly.</p>
+          </div>
+          <div style="display: flex; gap: 0.5rem;">
+            <button class="btn btn-secondary btn-sm" onclick="openContentItemModal(null, getTodayDayCode())">
+              ➕ Add for Today
+            </button>
+          </div>
+        </div>
+
+        <div id="today-items-container">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+    </section>
+
+    <!-- --------------------------------------------------------
+     * VIEW 2: CALENDAR (WEEKLY BATCH OVERVIEW)
+     * -------------------------------------------------------- -->
+    <section id="view-calendar" class="view-section">
+      <!-- Weekly Progress Banner -->
+      <div class="progress-banner">
+        <div class="progress-header">
+          <div class="progress-label">
+            <span>🚀 Weekly Posting Progress</span>
+          </div>
+          <div class="progress-count" id="weekly-progress-stats">
+            0 / 30 Posted
+          </div>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="weekly-progress-fill" style="width: 0%;"></div>
+        </div>
+      </div>
+
+      <!-- Mon - Sun Day Blocks -->
+      <div id="calendar-days-container">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- --------------------------------------------------------
+     * VIEW 3: IDEA BANK
+     * -------------------------------------------------------- -->
+    <section id="view-ideas" class="view-section">
+      <div class="panel-card">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">
+              <span>💡</span>
+              <span>Idea Bank</span>
+            </h2>
+            <p class="panel-subtitle">Unscheduled, low-friction idea capture. Promote into real content items anytime.</p>
+          </div>
+        </div>
+
+        <!-- Quick Capture Form -->
+        <div class="idea-quick-bar">
+          <textarea id="inp-quick-idea-text" class="form-textarea" placeholder="Drop an idea, hook, market observation, or case study thought..." rows="2"></textarea>
+          <div style="display: flex; gap: 0.5rem; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+            <input type="text" id="inp-quick-idea-tags" class="form-input" placeholder="Tags (e.g. PropTech, Real Estate, Automation)" style="max-width: 340px;" />
+            <div style="display: flex; gap: 0.4rem;">
+              <button class="btn btn-secondary btn-sm" onclick="triggerAIOnIdeaInput()">
+                ✨ Improve with AI
+              </button>
+              <button class="btn btn-primary btn-sm" onclick="saveQuickIdea()">
+                💡 Save Idea
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Ideas List -->
+        <div id="ideas-list-container">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+    </section>
+
+    <!-- --------------------------------------------------------
+     * VIEW 4: VIDEO SCRIPTS
+     * -------------------------------------------------------- -->
+    <section id="view-scripts" class="view-section">
+      <div class="panel-card">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">
+              <span>🎬</span>
+              <span>Video Scripts & Reels Studio</span>
+            </h2>
+            <p class="panel-subtitle">Plan, write hooks, track filming status, and organize short & long-form video scripts.</p>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="openScriptModal()">
+            ➕ New Script
+          </button>
+        </div>
+
+        <div id="scripts-list-container">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+    </section>
+
+    <!-- --------------------------------------------------------
+     * VIEW 5: SETTINGS & CARD CUSTOMIZER
+     * -------------------------------------------------------- -->
+    <section id="view-settings" class="view-section">
+      <div class="settings-grid">
+        
+        <!-- Profile & Branding -->
+        <div class="panel-card">
+          <h3 class="panel-title" style="margin-bottom: 1rem;">
+            <span>👤</span>
+            <span>Profile & Card Header</span>
+          </h3>
+
+          <div class="form-group">
+            <label class="form-label">Creator Display Name</label>
+            <input type="text" id="setting-name" class="form-input" value="Marvellous Adepoju" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Social Handle</label>
+            <input type="text" id="setting-handle" class="form-input" value="@devmarvellous" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Profile Avatar Image</label>
+            <div class="avatar-preview-box">
+              <img id="setting-avatar-preview" src="./favicon.svg" alt="Avatar" class="avatar-circle-img" />
+              <div>
+                <input type="file" id="setting-avatar-file" accept="image/*" style="font-size: 0.8rem;" onchange="handleAvatarUpload(event)" />
+                <p style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.25rem;">PNG or JPG (stored locally in IndexedDB).</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card Styling Options -->
+        <div class="panel-card">
+          <h3 class="panel-title" style="margin-bottom: 1rem;">
+            <span>🎨</span>
+            <span>Card Engine Styling</span>
+          </h3>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+            <div class="form-group">
+              <label class="form-label">Background Color</label>
+              <input type="color" id="setting-card-bg" class="form-input" value="#0f172a" style="height: 42px; padding: 2px;" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Accent / Highlight Color</label>
+              <input type="color" id="setting-card-accent" class="form-input" value="#6366f1" style="height: 42px; padding: 2px;" />
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+            <div class="form-group">
+              <label class="form-label">Text Color</label>
+              <input type="color" id="setting-card-text" class="form-input" value="#f8fafc" style="height: 42px; padding: 2px;" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Default Alignment</label>
+              <select id="setting-card-align" class="form-select">
+                <option value="left" selected>Left Align (Default)</option>
+                <option value="center">Center Align</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Font Size Scale (<span id="val-font-size">46px</span>)</label>
+            <input type="range" id="setting-card-size" min="32" max="64" value="46" step="2" class="form-input" oninput="document.getElementById('val-font-size').textContent = this.value + 'px'" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Default Canvas Aspect Ratio</label>
+            <select id="setting-card-preset" class="form-select">
+              <option value="square" selected>Square 1:1 (1080x1080) - Instagram / LinkedIn / X</option>
+              <option value="portrait">Portrait 4:5 (1080x1350) - Instagram Portrait</option>
+              <option value="story">Story / Reel 9:16 (1080x1920) - Shorts / Stories</option>
+            </select>
+          </div>
+
+          <button class="btn btn-primary btn-sm" onclick="saveSettingsForm()">
+            💾 Save Branding Settings
+          </button>
+        </div>
+
+        <!-- Google Gemini AI Key -->
+        <div class="panel-card">
+          <h3 class="panel-title" style="margin-bottom: 1rem;">
+            <span>✨</span>
+            <span>Google Gemini AI (Optional)</span>
+          </h3>
+          <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+            Power the "Improve for Socials" rewrite tool. Key is stored strictly inside your browser's IndexedDB and never sent anywhere else.
+          </p>
+
+          <div class="form-group">
+            <label class="form-label">Gemini API Key</label>
+            <input type="password" id="setting-gemini-key" class="form-input" placeholder="AIzaSy..." />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Model Endpoint</label>
+            <select id="setting-gemini-model" class="form-select">
+              <option value="gemini-1.5-flash" selected>gemini-1.5-flash (Fast & Recommended)</option>
+              <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+              <option value="gemini-1.5-pro">gemini-1.5-pro</option>
+            </select>
+          </div>
+
+          <div style="display: flex; gap: 0.5rem;">
+            <button class="btn btn-secondary btn-sm" onclick="testGeminiConnection()">
+              🧪 Test Connection
+            </button>
+            <button class="btn btn-primary btn-sm" onclick="saveSettingsForm()">
+              💾 Save Key
+            </button>
+          </div>
+        </div>
+
+        <!-- Backup & Data Management -->
+        <div class="panel-card">
+          <h3 class="panel-title" style="margin-bottom: 1rem;">
+            <span>📦</span>
+            <span>Backup & Data Management</span>
+          </h3>
+          <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+            Export all content, scripts, and settings to a JSON backup file or restore from a previous file.
+          </p>
+
+          <div style="display: flex; gap: 0.5rem; margin-bottom: 1.25rem; flex-wrap: wrap;">
+            <button class="btn btn-secondary btn-sm" onclick="exportBackupFile()">
+              📥 Export JSON Backup
+            </button>
+            <label class="btn btn-secondary btn-sm" style="cursor: pointer;">
+              📤 Restore from JSON
+              <input type="file" id="inp-restore-file" accept=".json" style="display: none;" onchange="handleRestoreFile(event)" />
+            </label>
+          </div>
+
+          <div style="border-top: 1px solid var(--border); padding-top: 1rem;">
+            <button class="btn btn-danger btn-sm" onclick="handleWipeData()">
+              🗑️ Wipe All Local Data
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- --------------------------------------------------------
+   * MODAL 1: ADD / EDIT CONTENT ITEM
+   * -------------------------------------------------------- -->
+  <div id="modal-content-item" class="modal-backdrop">
+    <div class="modal-window modal-window-lg">
+      <div class="modal-head">
+        <h3 id="modal-item-title">
+          <span>📝</span>
+          <span>Add / Edit Content Item</span>
+        </h3>
+        <button class="modal-close-btn" onclick="closeContentItemModal()">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <input type="hidden" id="edit-item-id" value="" />
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem;">
+          <div class="form-group">
+            <label class="form-label">Day of Week</label>
+            <select id="edit-item-day" class="form-select">
+              <option value="MON">Monday (MON)</option>
+              <option value="TUE">Tuesday (TUE)</option>
+              <option value="WED">Wednesday (WED)</option>
+              <option value="THU">Thursday (THU)</option>
+              <option value="FRI">Friday (FRI)</option>
+              <option value="SAT">Saturday (SAT)</option>
+              <option value="SUN">Sunday (SUN)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Content Format Type</label>
+            <select id="edit-item-type" class="form-select" onchange="toggleModalFieldsByType(this.value)">
+              <option value="CARDTEXT">CARDTEXT (Image Card + Caption)</option>
+              <option value="CARD">CARD (Image Card Only)</option>
+              <option value="TEXT">TEXT (Caption / Text Only)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Card Text Field -->
+        <div id="group-edit-card" class="form-group">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+            <label class="form-label" style="margin-bottom: 0;">Card Text (Supports **bold** & ++big++ markup)</label>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="triggerAIOnField('edit-item-card', 'Social Graphic Card Hook')">
+              ✨ Improve Card with AI
+            </button>
+          </div>
+          <textarea id="edit-item-card" class="form-textarea" rows="3" placeholder="Enter card headline with **bold** and ++big++ formatting..." oninput="updateModalCardPreview()"></textarea>
+          <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">
+            💡 Tip: Wrap words in <code>**text**</code> for bold, or <code>++text++</code> for large highlight.
+          </div>
+        </div>
+
+        <!-- Live Modal Card Preview -->
+        <div id="group-edit-preview" class="form-group" style="display: flex; flex-direction: column; align-items: center;">
+          <canvas id="modal-card-canvas" style="max-width: 280px; max-height: 280px; width: 100%; height: auto; border-radius: var(--radius-sm); border: 1px solid var(--border); box-shadow: var(--shadow-sm);"></canvas>
+        </div>
+
+        <!-- Caption Field -->
+        <div id="group-edit-caption" class="form-group">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+            <label class="form-label" style="margin-bottom: 0;">Social Media Caption / Thread Body</label>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="triggerAIOnField('edit-item-caption', 'Longform Social Media Post Caption')">
+              ✨ Improve Caption with AI
+            </button>
+          </div>
+          <textarea id="edit-item-caption" class="form-textarea" rows="5" placeholder="Write full caption, hashtags, bullet points, call to action..."></textarea>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-sm" onclick="closeContentItemModal()">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="saveContentItemFromModal()">💾 Save Item</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- --------------------------------------------------------
+   * MODAL 2: BATCH IMPORT (CONTRACT FORMAT)
+   * -------------------------------------------------------- -->
+  <div id="modal-batch-import" class="modal-backdrop">
+    <div class="modal-window modal-window-lg">
+      <div class="modal-head">
+        <h3>
+          <span>📥</span>
+          <span>Batch Content Import</span>
+        </h3>
+        <button class="modal-close-btn" onclick="closeBatchImportModal()">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <p style="font-size: 0.825rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+          Paste your batch content blocks separated by <code>---</code>. Importing replaces current content items after confirmation (leaves scripts and ideas untouched).
+        </p>
+
+        <textarea id="inp-batch-import-text" class="form-textarea" rows="12" style="font-family: monospace; font-size: 0.85rem;" placeholder="DAY: MON
+TYPE: CARDTEXT
+CARD: The biggest mistake founders make in **real estate** is ignoring title diligence.
+CAPTION: Here is why clean title deeds protect your capital... #RealEstate #PropTech
+---
+DAY: TUE
+TYPE: CARD
+CARD: Automation without process clarity is just ++accelerated chaos++.
+---
+DAY: WED
+TYPE: TEXT
+CAPTION: 3 SaaS tools I stopped paying for this month..."></textarea>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-sm" onclick="closeBatchImportModal()">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="executeBatchImport()">📥 Run Batch Import</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- --------------------------------------------------------
+   * MODAL 3: ADD / EDIT VIDEO SCRIPT
+   * -------------------------------------------------------- -->
+  <div id="modal-script" class="modal-backdrop">
+    <div class="modal-window modal-window-lg">
+      <div class="modal-head">
+        <h3 id="modal-script-title">
+          <span>🎬</span>
+          <span>Video Script</span>
+        </h3>
+        <button class="modal-close-btn" onclick="closeScriptModal()">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <input type="hidden" id="edit-script-id" value="" />
+
+        <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem;">
+          <div class="form-group">
+            <label class="form-label">Script Title</label>
+            <input type="text" id="edit-script-title-input" class="form-input" placeholder="e.g. 3 Title Mistakes in Lagos Real Estate" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Day (Optional)</label>
+            <select id="edit-script-day" class="form-select">
+              <option value="">(Unscheduled)</option>
+              <option value="MON">Monday</option>
+              <option value="TUE">Tuesday</option>
+              <option value="WED">Wednesday</option>
+              <option value="THU">Thursday</option>
+              <option value="FRI">Friday</option>
+              <option value="SAT">Saturday</option>
+              <option value="SUN">Sunday</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Status</label>
+            <select id="edit-script-status" class="form-select">
+              <option value="Idea">Idea</option>
+              <option value="Ready" selected>Ready</option>
+              <option value="Filmed">Filmed</option>
+              <option value="Posted">Posted</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+            <label class="form-label" style="margin-bottom: 0;">Full Script (Hook, Body, Call to Action)</label>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="triggerAIOnField('edit-script-body', 'Short-form Video Script Hook & Retention')">
+              ✨ Improve Script with AI
+            </button>
+          </div>
+          <textarea id="edit-script-body" class="form-textarea" rows="8" placeholder="HOOK (0-3s):
+BODY (3-45s):
+CALL TO ACTION (45-60s):"></textarea>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-sm" onclick="closeScriptModal()">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="saveScriptFromModal()">💾 Save Script</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- --------------------------------------------------------
+   * MODAL 4: AI REWRITE DIFF PREVIEW
+   * -------------------------------------------------------- -->
+  <div id="modal-ai-rewrite" class="modal-backdrop">
+    <div class="modal-window modal-window-lg">
+      <div class="modal-head">
+        <h3>
+          <span>✨</span>
+          <span>Gemini AI — Improve for Socials</span>
+        </h3>
+        <button class="modal-close-btn" onclick="MarvelAI.closeAIRewriteModal()">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div id="ai-loading-state" class="ai-loader">
+          <div class="ai-spinner"></div>
+          <span>Refining hook, tone, and social engagement...</span>
+        </div>
+
+        <div class="ai-diff-grid">
+          <div class="ai-diff-col">
+            <label>Original Text</label>
+            <textarea id="ai-original-text" class="form-textarea" rows="8" readonly style="opacity: 0.8;"></textarea>
+          </div>
+          <div class="ai-diff-col">
+            <label>✨ AI Rewritten Version</label>
+            <textarea id="ai-rewritten-text" class="form-textarea" rows="8"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-sm" onclick="MarvelAI.closeAIRewriteModal()">Discard</button>
+        <button id="btn-ai-accept" class="btn btn-primary btn-sm" onclick="MarvelAI.acceptAIRewrite()">✅ Accept (Replace)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Message Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Scripts -->
+  <script src="./js/db.js"></script>
+  <script src="./js/card-renderer.js"></script>
+  <script src="./js/ai.js"></script>
+  <script src="./js/app.js"></script>
+
+  <!-- Service Worker Registration -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => console.log('Marvel Content ServiceWorker registered:', reg.scope))
+          .catch(err => console.warn('ServiceWorker registration error:', err));
+      });
+    }
+  </script>
+</body>
+</html>
