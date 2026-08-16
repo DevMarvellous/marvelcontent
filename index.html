@@ -303,22 +303,23 @@
         <div class="panel-card">
           <h3 class="panel-title" style="margin-bottom: 1rem;">
             <span>✨</span>
-            <span>Google Gemini AI (Optional)</span>
+            <span>Google Gemini AI</span>
           </h3>
           <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
-            Power the "Improve for Socials" rewrite tool. Key is stored strictly inside your browser's IndexedDB and never sent anywhere else.
+            Powers the "Improve for Socials" rewrite tool. You can set <code>GEMINI_API_KEY</code> as an environment variable in Vercel, or paste your API key below (stored in local IndexedDB).
           </p>
 
           <div class="form-group">
-            <label class="form-label">Gemini API Key</label>
-            <input type="password" id="setting-gemini-key" class="form-input" placeholder="AIzaSy..." />
+            <label class="form-label">Gemini API Key (Optional if set on Vercel)</label>
+            <input type="password" id="setting-gemini-key" class="form-input" placeholder="AIzaSy... or AQ.Ab8..." />
           </div>
 
           <div class="form-group">
             <label class="form-label">Model Endpoint</label>
             <select id="setting-gemini-model" class="form-select">
-              <option value="gemini-1.5-flash" selected>gemini-1.5-flash (Fast & Recommended)</option>
-              <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+              <option value="gemini-2.0-flash" selected>gemini-2.0-flash (Latest & Recommended)</option>
+              <option value="gemini-2.0-flash-lite-preview-02-05">gemini-2.0-flash-lite (Ultra Fast)</option>
+              <option value="gemini-1.5-flash">gemini-1.5-flash</option>
               <option value="gemini-1.5-pro">gemini-1.5-pro</option>
             </select>
           </div>

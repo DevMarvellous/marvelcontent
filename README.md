@@ -99,13 +99,15 @@ content creation/
 ├── sw.js                    # Service Worker with offline-first caching
 ├── README.md                # Project documentation
 ├── marvel-content-app-spec.md # Original specification prompt
+├── api/
+│   └── rewrite.js           # Vercel Serverless Function (GEMINI_API_KEY proxy)
 ├── css/
 │   ├── main.css             # Design tokens, base layout, buttons & forms
 │   └── components.css       # Cards, platform pills, calendar, AI diff & responsive rules
 └── js/
     ├── db.js                # IndexedDB database layer & CRUD handlers
     ├── card-renderer.js     # HTML5 Canvas Card rendering engine
-    ├── ai.js                # Client-side Gemini AI integration
+    ├── ai.js                # Gemini 2.0 AI integration with Vercel & client fallback
     └── app.js               # Master application controller & routing
 ```
 

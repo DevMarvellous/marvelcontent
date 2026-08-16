@@ -20,7 +20,7 @@ const DEFAULT_SETTINGS = {
   cardAlign: "left", // 'left' | 'center'
   cardPreset: "square", // 'square' (1080x1080) | 'portrait' (1080x1350) | 'story' (1080x1920)
   geminiApiKey: "",
-  geminiModel: "gemini-1.5-flash"
+  geminiModel: "gemini-2.0-flash"
 };
 
 const SAMPLE_CONTENT_ITEMS = [
