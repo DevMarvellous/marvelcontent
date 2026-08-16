@@ -994,7 +994,7 @@ function loadSettingsIntoForm(settings) {
   setVal('setting-card-size', settings.cardFontSize || 46);
   setVal('setting-card-preset', settings.cardPreset || 'square');
   setVal('setting-gemini-key', settings.geminiApiKey || '');
-  setVal('setting-gemini-model', settings.geminiModel || 'gemini-1.5-flash');
+  setVal('setting-gemini-model', settings.geminiModel || 'gemini-2.0-flash');
 
   const fsLabel = document.getElementById('val-font-size');
   if (fsLabel) fsLabel.textContent = `${settings.cardFontSize || 46}px`;
@@ -1003,6 +1003,43 @@ function loadSettingsIntoForm(settings) {
   if (avatarImg && settings.headerAvatar) {
     avatarImg.src = settings.headerAvatar;
   }
+
+  updateSettingsCardPreview();
+}
+
+function applyColorPreset(bg, accent, text) {
+  const bgInput = document.getElementById('setting-card-bg');
+  const accentInput = document.getElementById('setting-card-accent');
+  const textInput = document.getElementById('setting-card-text');
+
+  if (bgInput) bgInput.value = bg;
+  if (accentInput) accentInput.value = accent;
+  if (textInput) textInput.value = text;
+
+  updateSettingsCardPreview();
+  showToast('Color theme applied! Click Save to keep.', 'info');
+}
+
+function updateSettingsCardPreview() {
+  const canvas = document.getElementById('settings-card-canvas');
+  if (!canvas || !window.MarvelCardRenderer) return;
+
+  const getVal = (id) => document.getElementById(id)?.value;
+
+  const previewSettings = {
+    headerName: getVal('setting-name') || currentAppSettings?.headerName || 'Marvellous Adepoju',
+    headerHandle: getVal('setting-handle') || currentAppSettings?.headerHandle || '@devmarvellous',
+    headerAvatar: currentAppSettings?.headerAvatar || '',
+    cardBg: getVal('setting-card-bg') || '#0f172a',
+    cardAccentColor: getVal('setting-card-accent') || '#6366f1',
+    cardTextColor: getVal('setting-card-text') || '#f8fafc',
+    cardAlign: getVal('setting-card-align') || 'left',
+    cardFontSize: Number(getVal('setting-card-size')) || 46,
+    cardPreset: getVal('setting-card-preset') || 'square'
+  };
+
+  const sampleCardText = "Your **custom card colors** look stunning.\n\nHighlight your ideas with ++high-impact++ visual contrast.";
+  window.MarvelCardRenderer.renderCardToCanvas(canvas, sampleCardText, previewSettings);
 }
 
 async function saveSettingsForm() {
@@ -1019,7 +1056,7 @@ async function saveSettingsForm() {
     cardFontSize: Number(getVal('setting-card-size')) || 46,
     cardPreset: getVal('setting-card-preset') || 'square',
     geminiApiKey: (getVal('setting-gemini-key') || '').trim(),
-    geminiModel: getVal('setting-gemini-model') || 'gemini-1.5-flash'
+    geminiModel: getVal('setting-gemini-model') || 'gemini-2.0-flash'
   };
 
   await window.MarvelDB.saveSetting('app_settings', newSettings);
@@ -1248,3 +1285,5 @@ window.copyTextToClipboard = copyTextToClipboard;
 window.triggerPWAInstall = triggerPWAInstall;
 window.dismissPWABanner = dismissPWABanner;
 window.getTodayDayCode = getTodayDayCode;
+window.applyColorPreset = applyColorPreset;
+window.updateSettingsCardPreview = updateSettingsCardPreview;

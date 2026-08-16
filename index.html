@@ -250,30 +250,61 @@
 
         <!-- Card Styling Options -->
         <div class="panel-card">
-          <h3 class="panel-title" style="margin-bottom: 1rem;">
+          <h3 class="panel-title" style="margin-bottom: 0.5rem;">
             <span>🎨</span>
             <span>Card Engine Styling</span>
           </h3>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">
+            Customize your card background, text colors, alignment, and dimensions.
+          </p>
+
+          <!-- 1-Click Palette Presets -->
+          <div class="form-group">
+            <label class="form-label">✨ Quick Color Themes</label>
+            <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.85rem;">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="applyColorPreset('#0f172a', '#6366f1', '#f8fafc')">
+                🌌 Midnight Indigo
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="applyColorPreset('#000000', '#f59e0b', '#f8fafc')">
+                🖤 Obsidian Gold
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="applyColorPreset('#052e16', '#10b981', '#f0fdf4')">
+                🌲 Forest Emerald
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="applyColorPreset('#1e112a', '#a855f7', '#faf5ff')">
+                🍇 Royal Violet
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="applyColorPreset('#082f49', '#06b6d4', '#f0f9ff')">
+                🌊 Deep Ocean
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="applyColorPreset('#1c0a0a', '#ef4444', '#fef2f2')">
+                🔴 Crimson Noir
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="applyColorPreset('#ffffff', '#4f46e5', '#0f172a')">
+                ⚪ Editorial Light
+              </button>
+            </div>
+          </div>
 
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
             <div class="form-group">
               <label class="form-label">Background Color</label>
-              <input type="color" id="setting-card-bg" class="form-input" value="#0f172a" style="height: 42px; padding: 2px;" />
+              <input type="color" id="setting-card-bg" class="form-input" value="#0f172a" style="height: 42px; padding: 2px; cursor: pointer;" oninput="updateSettingsCardPreview()" />
             </div>
             <div class="form-group">
-              <label class="form-label">Accent / Highlight Color</label>
-              <input type="color" id="setting-card-accent" class="form-input" value="#6366f1" style="height: 42px; padding: 2px;" />
+              <label class="form-label">Accent / ++Big++ Color</label>
+              <input type="color" id="setting-card-accent" class="form-input" value="#6366f1" style="height: 42px; padding: 2px; cursor: pointer;" oninput="updateSettingsCardPreview()" />
             </div>
           </div>
 
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
             <div class="form-group">
               <label class="form-label">Text Color</label>
-              <input type="color" id="setting-card-text" class="form-input" value="#f8fafc" style="height: 42px; padding: 2px;" />
+              <input type="color" id="setting-card-text" class="form-input" value="#f8fafc" style="height: 42px; padding: 2px; cursor: pointer;" oninput="updateSettingsCardPreview()" />
             </div>
             <div class="form-group">
               <label class="form-label">Default Alignment</label>
-              <select id="setting-card-align" class="form-select">
+              <select id="setting-card-align" class="form-select" onchange="updateSettingsCardPreview()">
                 <option value="left" selected>Left Align (Default)</option>
                 <option value="center">Center Align</option>
               </select>
@@ -282,16 +313,22 @@
 
           <div class="form-group">
             <label class="form-label">Font Size Scale (<span id="val-font-size">46px</span>)</label>
-            <input type="range" id="setting-card-size" min="32" max="64" value="46" step="2" class="form-input" oninput="document.getElementById('val-font-size').textContent = this.value + 'px'" />
+            <input type="range" id="setting-card-size" min="32" max="64" value="46" step="2" class="form-input" oninput="document.getElementById('val-font-size').textContent = this.value + 'px'; updateSettingsCardPreview();" />
           </div>
 
           <div class="form-group">
             <label class="form-label">Default Canvas Aspect Ratio</label>
-            <select id="setting-card-preset" class="form-select">
+            <select id="setting-card-preset" class="form-select" onchange="updateSettingsCardPreview()">
               <option value="square" selected>Square 1:1 (1080x1080) - Instagram / LinkedIn / X</option>
               <option value="portrait">Portrait 4:5 (1080x1350) - Instagram Portrait</option>
               <option value="story">Story / Reel 9:16 (1080x1920) - Shorts / Stories</option>
             </select>
+          </div>
+
+          <!-- Live Settings Card Preview -->
+          <div class="form-group" style="display: flex; flex-direction: column; align-items: center; margin: 1rem 0;">
+            <label class="form-label" style="align-self: flex-start;">Live Card Preview</label>
+            <canvas id="settings-card-canvas" style="max-width: 280px; max-height: 280px; width: 100%; height: auto; border-radius: var(--radius-sm); border: 1px solid var(--border); box-shadow: var(--shadow-md);"></canvas>
           </div>
 
           <button class="btn btn-primary btn-sm" onclick="saveSettingsForm()">
