@@ -1,8 +1,6 @@
 /**
  * Marvel Content — Client-Side Gemini AI Rewrite Module
- * Supports dual execution:
- * 1. Vercel Serverless Function (/api/rewrite) with GEMINI_API_KEY environment variable.
- * 2. Direct client-side fetch fallback using local IndexedDB key with latest Gemini 2.0 models.
+ * Implements dynamic Google ModelService.ListModels discovery with automatic fallback.
  */
 
 const GEMINI_SYSTEM_INSTRUCTION = `You are a world-class social media copywriter and growth strategist for Marvellous Adepoju, specializing in Real Estate, Business Technology, and PropTech.
@@ -14,19 +12,40 @@ Rules:
 4. Keep the tone authentic, sharp, authoritative, and accessible.
 5. Return ONLY the rewritten text without conversational preamble, quotes, or markdown code fences.`;
 
-// Modern Gemini models prioritized in order
-const MODERN_GEMINI_MODELS = [
-  'gemini-2.0-flash',
-  'gemini-2.0-flash-lite-preview-02-05',
-  'gemini-1.5-flash',
-  'gemini-1.5-pro'
-];
+// Cached list of discovered active models for this session
+let cachedActiveModels = null;
 
 /**
  * Check if the browser is online
  */
 function isOnline() {
   return typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
+}
+
+/**
+ * Dynamically discover models supported by the provided API key
+ */
+async function discoverAvailableGeminiModels(apiKey) {
+  if (cachedActiveModels && cachedActiveModels.length > 0) {
+    return cachedActiveModels;
+  }
+
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data.models)) {
+        cachedActiveModels = data.models
+          .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent'))
+          .map(m => m.name.replace(/^models\//, ''));
+        return cachedActiveModels;
+      }
+    }
+  } catch (err) {
+    console.warn('[Model Discovery] ListModels skipped:', err.message);
+  }
+
+  return [];
 }
 
 /**
@@ -72,12 +91,11 @@ async function improveTextWithGemini(inputText, options = {}) {
       }
     }
   } catch (apiErr) {
-    // Expected when running on local file:// protocol or non-serverless dev server
-    console.log('Serverless API skipped/unavailable, trying client-side direct fetch:', apiErr.message);
+    console.log('Serverless API unavailable/local file mode, using client fetch:', apiErr.message);
   }
 
   // -------------------------------------------------------------
-  // Mode 2: Client-side direct Google Gemini API call
+  // Mode 2: Client-side direct Google Gemini API call with dynamic discovery
   // -------------------------------------------------------------
   const clientKey = (settings.geminiApiKey || '').trim();
   if (!clientKey) {
@@ -86,14 +104,24 @@ async function improveTextWithGemini(inputText, options = {}) {
     throw error;
   }
 
-  const modelsToTry = [
+  // Discover actual supported models from user's key
+  const discoveredModels = await discoverAvailableGeminiModels(clientKey);
+
+  const fallbackList = [
     preferredModel,
-    ...MODERN_GEMINI_MODELS
+    'gemini-2.0-flash',
+    'gemini-1.5-flash-latest',
+    'gemini-1.5-flash',
+    'gemini-2.0-flash-exp',
+    'gemini-1.5-flash-8b',
+    'gemini-1.0-pro'
   ];
-  const uniqueModels = [...new Set(modelsToTry.filter(Boolean))];
+
+  const modelsToTry = [...new Set([...discoveredModels, ...fallbackList].filter(Boolean))];
   let lastClientError = null;
 
-  for (const currentModel of uniqueModels) {
+  for (const rawModel of modelsToTry) {
+    const currentModel = rawModel.replace(/^models\//, '');
     try {
       const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${clientKey}`;
 
@@ -136,11 +164,11 @@ async function improveTextWithGemini(inputText, options = {}) {
       return textOutput.trim();
     } catch (err) {
       lastClientError = err;
-      console.warn(`[Client Direct] Model ${currentModel} failed, trying next fallback:`, err.message);
+      console.warn(`[Client Direct] Model ${currentModel} failed, trying next available:`, err.message);
     }
   }
 
-  throw new Error(lastClientError ? lastClientError.message : 'All Gemini model endpoints failed.');
+  throw new Error(lastClientError ? lastClientError.message : 'All available Gemini model endpoints failed.');
 }
 
 /**
@@ -222,9 +250,9 @@ function closeAIRewriteModal() {
 
 window.MarvelAI = {
   isOnline,
+  discoverAvailableGeminiModels,
   improveTextWithGemini,
   openAIRewriteModal,
   acceptAIRewrite,
-  closeAIRewriteModal,
-  MODERN_GEMINI_MODELS
+  closeAIRewriteModal
 };

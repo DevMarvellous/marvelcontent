@@ -1,6 +1,7 @@
 /**
  * Vercel Serverless Function: /api/rewrite
  * Securely proxies AI rewrite requests using GEMINI_API_KEY environment variable.
+ * Includes dynamic ModelService discovery & fallback.
  */
 
 const SYSTEM_INSTRUCTION = `You are a world-class social media copywriter and growth strategist for Marvellous Adepoju, specializing in Real Estate, Business Technology, and PropTech.
@@ -43,21 +44,40 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: { message: 'Missing or invalid inputText parameter.' } });
   }
 
-  // List of modern models to try with automatic fallback
-  const modelsToTry = [
+  // 1. Dynamic Model Discovery: Query Google's ListModels endpoint
+  let availableModels = [];
+  try {
+    const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+    if (listRes.ok) {
+      const listData = await listRes.json();
+      if (Array.isArray(listData.models)) {
+        availableModels = listData.models
+          .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent'))
+          .map(m => m.name.replace(/^models\//, ''));
+      }
+    }
+  } catch (discoveryErr) {
+    console.warn('[Vercel Serverless] ListModels query skipped:', discoveryErr.message);
+  }
+
+  // Build prioritized models list
+  const fallbackList = [
     model,
     'gemini-2.0-flash',
-    'gemini-2.0-flash-lite-preview-02-05',
+    'gemini-1.5-flash-latest',
     'gemini-1.5-flash',
-    'gemini-1.5-pro'
+    'gemini-2.0-flash-exp',
+    'gemini-1.5-flash-8b',
+    'gemini-1.0-pro'
   ];
 
-  const uniqueModels = [...new Set(modelsToTry.filter(Boolean))];
+  const modelsToTry = [...new Set([...availableModels, ...fallbackList].filter(Boolean))];
   let lastError = null;
 
-  for (const currentModel of uniqueModels) {
+  for (const currentModel of modelsToTry) {
+    const cleanModel = currentModel.replace(/^models\//, '');
     try {
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${apiKey}`;
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${apiKey}`;
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -86,7 +106,7 @@ export default async function handler(req, res) {
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
         const errMessage = errData?.error?.message || `Status ${response.status}`;
-        throw new Error(`Model ${currentModel}: ${errMessage}`);
+        throw new Error(`${cleanModel}: ${errMessage}`);
       }
 
       const data = await response.json();
@@ -94,25 +114,25 @@ export default async function handler(req, res) {
       const textOutput = candidate?.content?.parts?.[0]?.text;
 
       if (!textOutput) {
-        throw new Error(`No text generated from ${currentModel}`);
+        throw new Error(`Empty response from ${cleanModel}`);
       }
 
       res.setHeader('Access-Control-Allow-Origin', '*');
       return res.status(200).json({
         success: true,
-        modelUsed: currentModel,
+        modelUsed: cleanModel,
         rewrittenText: textOutput.trim()
       });
     } catch (err) {
       lastError = err;
-      console.warn(`[Vercel Serverless] Attempt with ${currentModel} failed, trying fallback:`, err.message);
+      console.warn(`[Vercel Serverless] Model ${cleanModel} failed, trying next available model:`, err.message);
     }
   }
 
   res.setHeader('Access-Control-Allow-Origin', '*');
   return res.status(500).json({
     error: {
-      message: lastError ? lastError.message : 'All Gemini model endpoints failed.'
+      message: lastError ? lastError.message : 'All available Gemini model endpoints failed.'
     }
   });
 }
